@@ -50,6 +50,7 @@ python-dateutil==2.9.0.post0
 pytz==2025.2
 pyzmq==27.1.0
 qiskit==2.2.3
+qiskit-aer==0.17.2
 qiskit-ibm-runtime==0.43.1
 qutip==5.2.2
 requests==2.32.5

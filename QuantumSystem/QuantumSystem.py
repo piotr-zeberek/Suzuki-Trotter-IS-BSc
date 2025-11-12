@@ -5,16 +5,26 @@ import warnings
 
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import PauliEvolutionGate
-from qiskit.primitives import StatevectorEstimator
 from qiskit.quantum_info import Statevector, SparsePauliOp
 from qiskit.synthesis import (
-    EvolutionSynthesis,
+    ProductFormula,
     SuzukiTrotter,
     LieTrotter,
 )
-from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+from qiskit.transpiler.preset_passmanagers import (
+    generate_preset_pass_manager,
+)
+from qiskit.transpiler.passmanager import StagedPassManager
 
-from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
+from qiskit.providers import BackendV2 as Backend
+from qiskit_aer import AerSimulator
+from qiskit_ibm_runtime import QiskitRuntimeService, Session
+
+from qiskit_ibm_runtime import (
+    EstimatorV2 as Estimator,
+    SamplerV2 as Sampler,
+    IBMBackend,
+)
 
 warnings.filterwarnings("ignore")
 
@@ -32,9 +42,31 @@ class QuantumSystemConfig:
     init_state: str
     hamiltonian_tuples: list[Term]
     e_ops_tuples: list[list[Term]]
+    order: int = 2
+    reps: int = 1
+    synthesis: ProductFormula = None
     num_shots: int = 8192
-    optimization_level: int = 3
-    estimator = StatevectorEstimator()
+    optimization_level: int = 2
+    backend: Backend | None = AerSimulator()
+    pm: StagedPassManager | None = None
+
+    def __post_init__(self):
+        self.set_synthesis_parameters(self.order, self.reps)
+        self.set_backend(self.backend)
+
+    def set_synthesis_parameters(self, order: int = 2, reps: int = 1):
+        self.order = order
+        self.reps = reps
+        if order == 1:
+            self.synthesis = LieTrotter(reps=reps)
+        else:
+            self.synthesis = SuzukiTrotter(order=order, reps=reps)
+
+    def set_backend(self, backend: Backend | None = None):
+        if backend is None:
+            backend = AerSimulator()
+        self.backend = backend
+        self.pm = generate_preset_pass_manager(self.optimization_level, self.backend)
 
 
 class QuantumSystem:
@@ -85,6 +117,12 @@ class QuantumSystem:
             qutip_op += coeff * tensor(op_list)
         return qutip_op
 
+    def clear(self):
+        """Clear stored results from previous simulations."""
+        self.evolved_state = self.init_circuit.copy()
+        self.qiskit_results = [[] for _ in range(len(self.e_ops))]
+        self.qutip_results = None
+
     def perform_qutip_time_evolution(self, times: np.ndarray | list[float]):
         """Perform exact time evolution using QuTiP's SESolver."""
         solver = SESolver(self.qutip_hamiltonian)
@@ -93,63 +131,52 @@ class QuantumSystem:
         ).expect
         return self.qutip_results
 
-    def perform_qiskit_time_evolution(
-        self, times: np.ndarray | list[float], order: int = 2, reps: int = 1
-    ):
+    def perform_qiskit_time_evolution(self, times: np.ndarray | list[float]):
         """Perform time evolution using trotterization and Qiskit Estimator."""
 
-        if order == 1:
-            synthesis = LieTrotter(reps=reps)
-        elif order % 2 == 0:
-            synthesis = SuzukiTrotter(order=order, reps=reps)
-        else:
-            raise ValueError("Only order 1 and even orders are supported.")
-
         self.clear()
+        
+        with Session(backend=self.config.backend) as session:
+            estimator = Estimator(mode=session)
 
-        self.calculate_expectation_values()
+            self.calculate_expectation_values(estimator)
 
-        for i in range(1, len(times)):
-            dt = times[i] - times[i - 1]
-            evolution_gates = PauliEvolutionGate(
-                self.hamiltonian, dt, synthesis=synthesis
-            )
-            self.evolved_state.append(evolution_gates, self.evolved_state.qubits)
-            self.calculate_expectation_values()
+            for i in range(1, len(times)):
+                dt = times[i] - times[i - 1]
+                evolution_gates = PauliEvolutionGate(
+                    self.hamiltonian, dt, synthesis=self.config.synthesis
+                )
+                self.evolved_state.append(evolution_gates, self.evolved_state.qubits)
+                self.calculate_expectation_values(estimator)
 
         return self.qiskit_results
 
-    def calculate_expectation_values(self):
+    def calculate_expectation_values(self, estimator: Estimator):
         """Calculate expectation values for all e_ops given a circuit and store them."""
         precision = np.sqrt(1 / self.config.num_shots)
 
-        job = self.config.estimator.run(
-            [(self.evolved_state, self.e_ops)], precision=precision
-        )
+        isa_circuit = self.config.pm.run(self.evolved_state)
+        isa_e_ops = [e_op.apply_layout(isa_circuit.layout) for e_op in self.e_ops]
+
+        job = estimator.run([(isa_circuit, isa_e_ops)], precision=precision)
         results = job.result()[0].data.evs
 
         for i, ev in enumerate(results):
             self.qiskit_results[i].append(ev)
 
-    def clear(self):
-        """Clear stored results from previous simulations."""
-        self.evolved_state = self.init_circuit.copy()
-        self.qiskit_results = [[] for _ in range(len(self.e_ops))]
-        self.qutip_results = None
+    def get_single_step_circuit_data(self):
+        """Generate a single-step evolution circuit and return its characteristics."""
+        dt = 1.0  # irrelevant (hopefully)
+        evolution_gates = PauliEvolutionGate(
+            self.hamiltonian, dt, synthesis=self.config.synthesis
+        )
+        ciruit = QuantumCircuit(self.config.num_qubits)
+        ciruit.append(evolution_gates, ciruit.qubits)
+        ciruit = ciruit.decompose(reps=3)
 
-    # def get_single_step_circuit_data(self):
-    #     """Generate a single-step evolution circuit and return its characteristics."""
-    #     dt = 1.0  # irrelevant
-    #     evolution_gates = PauliEvolutionGate(
-    #         self.hamiltonian, dt, synthesis=self.config.synthesis
-    #     )
-    #     ciruit = QuantumCircuit(self.config.num_qubits)
-    #     ciruit.append(evolution_gates, ciruit.qubits)
-    #     ciruit = ciruit.decompose(reps=3)
-
-    #     return {
-    #         "depth": ciruit.depth(),
-    #         "gate_count": len(ciruit),
-    #         "nonlocal_gate_count": ciruit.num_nonlocal_gates(),
-    #         "gate_breakdown": {k: v for k, v in ciruit.count_ops().items()},
-    #     }
+        return {
+            "depth": ciruit.depth(),
+            "gate_count": len(ciruit),
+            "nonlocal_gate_count": ciruit.num_nonlocal_gates(),
+            "gate_breakdown": {k: v for k, v in ciruit.count_ops().items()},
+        }
