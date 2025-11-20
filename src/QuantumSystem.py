@@ -41,7 +41,7 @@ class QuantumSystemConfig:
     num_qubits: int
     init_state: str
     hamiltonian_tuples: list[Term]
-    e_ops_tuples: list[list[Term]]
+    observables_tuples: list[list[Term]]
     order: int = 2
     reps: int = 1
     synthesis: ProductFormula = None
@@ -88,9 +88,9 @@ class QuantumSystem:
         self.hamiltonian = SparsePauliOp.from_sparse_list(
             self.config.hamiltonian_tuples, num_qubits=self.config.num_qubits
         )
-        self.e_ops = [
+        self.observables = [
             SparsePauliOp.from_sparse_list(op_tuples, num_qubits=self.config.num_qubits)
-            for op_tuples in self.config.e_ops_tuples
+            for op_tuples in self.config.observables_tuples
         ]
 
     def __prepare_qutip_prerequisites(self):
@@ -99,7 +99,7 @@ class QuantumSystem:
             [basis(2, int(bit)) for bit in reversed(self.config.init_state)]
         )
         self.qutip_hamiltonian = self.__convert_qiskit_to_qutip_op(self.hamiltonian)
-        self.qutip_e_ops = [self.__convert_qiskit_to_qutip_op(op) for op in self.e_ops]
+        self.qutip_observables = [self.__convert_qiskit_to_qutip_op(op) for op in self.observables]
 
     def __convert_qiskit_to_qutip_op(self, op: SparsePauliOp):
         """Convert a SparsePauliOp to a QuTiP operator."""
@@ -120,14 +120,14 @@ class QuantumSystem:
     def clear(self):
         """Clear stored results from previous simulations."""
         self.evolved_state = self.init_circuit.copy()
-        self.qiskit_results = [[] for _ in range(len(self.e_ops))]
+        self.qiskit_results = [[] for _ in range(len(self.observables))]
         self.qutip_results = None
 
     def perform_qutip_time_evolution(self, times: np.ndarray | list[float]):
         """Perform exact time evolution using QuTiP's SESolver."""
         solver = SESolver(self.qutip_hamiltonian)
         self.qutip_results = solver.run(
-            self.qutip_init_state, times, e_ops=self.qutip_e_ops
+            self.qutip_init_state, times, observables=self.qutip_observables
         ).expect
         return self.qutip_results
 
@@ -152,13 +152,13 @@ class QuantumSystem:
         return self.qiskit_results
 
     def calculate_expectation_values(self, estimator: Estimator):
-        """Calculate expectation values for all e_ops given a circuit and store them."""
+        """Calculate expectation values for all observables given a circuit and store them."""
         precision = np.sqrt(1 / self.config.num_shots)
 
         isa_circuit = self.config.pm.run(self.evolved_state)
-        isa_e_ops = [e_op.apply_layout(isa_circuit.layout) for e_op in self.e_ops]
+        isa_observables = [observable.apply_layout(isa_circuit.layout) for observable in self.observables]
 
-        job = estimator.run([(isa_circuit, isa_e_ops)], precision=precision)
+        job = estimator.run([(isa_circuit, isa_observables)], precision=precision)
         results = job.result()[0].data.evs
 
         for i, ev in enumerate(results):
