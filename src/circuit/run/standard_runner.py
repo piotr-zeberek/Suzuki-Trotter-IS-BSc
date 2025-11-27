@@ -1,33 +1,13 @@
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import SparsePauliOp
-from qiskit.transpiler.preset_passmanagers import (
-    generate_preset_pass_manager,
-)
-from qiskit_ibm_runtime import Session, EstimatorV2 as Estimator, SamplerV2 as Sampler
 
-import math
+from .runner import CircuitRunner
 
 
-class CircuitRunner:
+class StandardCircuitRunner(CircuitRunner):
     def __init__(self, num_shots: int = 8192, optimization_level: int = 2):
-        self.num_shots = num_shots
-        self.optimization_level = optimization_level
-
-        self.precision = math.sqrt(1 / self.num_shots)
-
-        self.session = None
-        self.estimator = None
-        self.sampler = None
-        self.pm = None
-
-    def set_session(self, session: Session) -> None:
-        self.session = session
-        self.estimator = Estimator(mode=self.session)
-        self.sampler = Sampler(mode=self.session)
-        self.pm = generate_preset_pass_manager(
-            optimization_level=self.optimization_level, backend=self.session._backend
-        )
-
+        super().__init__(num_shots, optimization_level)
+        
     def estimate(self, circuit: QuantumCircuit, observables: list[SparsePauliOp]) -> list[float]:
 
         isa_circuit = self.pm.run(circuit)

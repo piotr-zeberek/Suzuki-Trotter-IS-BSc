@@ -1,5 +1,6 @@
 from typing import Optional, List
 from qiskit.quantum_info import SparsePauliOp
+from qiskit import QuantumCircuit
 
 from .term import Term
 
@@ -8,7 +9,7 @@ class Problem:
     def __init__(
         self,
         num_qubits: int,
-        init_state: Optional[str],
+        init_state: Optional[str]|QuantumCircuit,
         hamiltonian_terms: List[Term],
         observables_terms: List[List[Term]],
     ):
