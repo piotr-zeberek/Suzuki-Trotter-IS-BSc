@@ -1,8 +1,9 @@
 from src.definition import Problem, Term
 from src.solver import QutipSolver
 
-from src.control import FixedTimeControl
-from src.circuit import CircuitEvolver
+from src.circuit import FixedCircuitEvolver, RefiningCircuitEvolver
+from src.circuit import OBPCircuitRunner
+from src.circuit import StandardCircuitBuilder
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -51,8 +52,26 @@ import matplotlib.pyplot as plt
 # qutip_solver = QutipSolver(problem, qutip_times)
 # qutip_results = qutip_solver.solve()
 
-# control = FixedTimeControl(times=times)
-# evolver = CircuitEvolver(problem, control)
+# # runner = OBPCircuitRunner()
+
+# builder = StandardCircuitBuilder(problem=problem, synthesis_order=4)
+
+# # evolver = FixedCircuitEvolver(
+# #     problem=problem,
+# #     times=times,
+# #     runner=runner,
+# #     builder=builder,
+# # )
+
+# evolver = RefiningCircuitEvolver(
+#     problem=problem,
+#     final_time=time,
+#     builder=builder,
+#     init_dt=times[1] - times[0],
+#     allowed_evs_changes=[1e-2, 1e-2, 1e-2],
+#     # sample_circuit=True,
+#     # min_sampling_fidelity=0.95,
+# )
 
 # qiskit_results = evolver.evolve()
 
@@ -67,7 +86,7 @@ import matplotlib.pyplot as plt
 #         color="blue",
 #     )
 #     plt.plot(
-#         times,
+#         qiskit_results.times,
 #         qiskit_results.expect[i],
 #         "o-",
 #         label="Qiskit Trotterized",
@@ -79,7 +98,7 @@ import matplotlib.pyplot as plt
 #     plt.grid()
 #     plt.legend()
 # plt.tight_layout()
-# plt.savefig("ising_dynamics.png")
+# plt.savefig("refining_ising_dynamics_4th_order.png")
 
 
 num_qubits = 1
@@ -131,15 +150,38 @@ problem = Problem(
 qutip_solver = QutipSolver(problem, qutip_times)
 qutip_results = qutip_solver.solve()
 
-control = FixedTimeControl(times=times)
-evolver = CircuitEvolver(problem, control)
+builder = StandardCircuitBuilder(problem=problem, synthesis_order=2)
+runner = OBPCircuitRunner(
+    num_shots=8192,
+    optimization_level=2,
+    max_qwc_groups=8,
+    # max_error_per_slice=1e-2,
+)
+
+# evolver = FixedCircuitEvolver(
+#     problem=problem,
+#     times=times,
+#     # runner=runner,
+#     builder=builder,
+# )
+
+evolver = RefiningCircuitEvolver(
+    problem=problem,
+    final_time=time,
+    init_dt=times[1] - times[0],
+    allowed_evs_changes=[1e-2 for _ in observables_tuples],
+    # runner=runner,
+    builder=builder,
+    min_dt= 0.01
+)
+
 qiskit_results = evolver.evolve()
 
 labels = ["X Expectation", "Y Expectation", "Z Expectation", "P(0)", "P(1)"]
 for i in range(len(observables_tuples)):
     plt.plot(qutip_times, qutip_results.expect[i], label=labels[i])
     plt.plot(
-        times,
+        qiskit_results.times,
         qiskit_results.expect[i],
         "o-",
     )
@@ -148,4 +190,7 @@ for i in range(len(observables_tuples)):
 
 plt.legend()
 plt.tight_layout()
-plt.savefig("rabi_dynamics.png")
+# plt.savefig("fixed_rabi_dynamics.png")
+plt.savefig("refined_rabi_dynamics.png")
+
+print(qiskit_results)
