@@ -9,6 +9,7 @@ from qutip import (
     Qobj,
     QobjEvo,
     coefficient,
+    ket
 )
 
 from ..definition import Term, Problem
@@ -27,6 +28,7 @@ class QutipSolver(Solver):
     def solve(self):
         """Perform exact time evolution using QuTiP's SESolver."""
         solver = SESolver(self.hamiltonian)
+        solver.options['store_states'] = True
         self.results = solver.run(
             self.init_state, self.times, e_ops=self.observables
         )
@@ -34,9 +36,7 @@ class QutipSolver(Solver):
 
     def _convert_to_qutip(self) -> None:
         """Convert problem data to QuTiP objects."""
-        self.init_state = tensor(
-            [basis(2, int(bit)) for bit in reversed(self.problem.init_state)]
-        )
+        self.init_state = ket(self.problem.init_state)
         self.hamiltonian = sum(
             self._Term_to_Qobj(term) for term in self.problem.hamiltonian_terms
         )
@@ -61,6 +61,7 @@ class QutipSolver(Solver):
         coeff = (
             coefficient(op.coefficient) if callable(op.coefficient) else op.coefficient
         )
-        qutip_op = coeff * tensor(op_list)
+        qutip_op = coeff * tensor(reversed(op_list))
+        # qutip_op = coeff * tensor(op_list)
 
         return qutip_op

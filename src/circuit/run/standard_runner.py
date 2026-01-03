@@ -23,6 +23,7 @@ class StandardCircuitRunner(CircuitRunner):
         measured_circuit.measure_all()
 
         isa_circuit = self.pm.run(measured_circuit)
+        self.last_transpiled_not_measured_circuit = isa_circuit
 
         job = self.sampler.run([isa_circuit], shots=self.num_shots)
         data_pub = job.result()[0].data

@@ -12,6 +12,7 @@ from qiskit.providers import BackendV2 as Backend
 from qiskit_aer import AerSimulator
 
 from qiskit_ibm_runtime import Session
+from qiskit.quantum_info import Statevector, DensityMatrix
 
 
 class CircuitEvolver(ABC):
@@ -36,7 +37,7 @@ class CircuitEvolver(ABC):
     @abstractmethod
     def evolve(self):
         pass
-    
+
     def reset(self):
         self.builder.reset()
         self.results = EvolutionResult(
@@ -57,20 +58,32 @@ class CircuitEvolver(ABC):
                 )
 
         self.results.times.append(time)
-        self.results.depths.append(
-            self.builder.evolved_circuit.decompose(reps=3).depth()
-        )
-        self.results.gate_counts.append(
-            len(self.builder.evolved_circuit.decompose(reps=3))
-        )
-        self.results.nonlocal_gate_counts.append(
-            self.builder.evolved_circuit.decompose(reps=3).num_nonlocal_gates()
-        )
+
+        circuit = self.builder.evolved_circuit.decompose(reps=3)
+
+        # self.results.states.append(Statevector.from_instruction(circuit))
+        # self.results.depths.append(circuit.depth())
+        # self.results.gate_counts.append(len(circuit))
+        # self.results.nonlocal_gate_counts.append(circuit.num_nonlocal_gates())
+        # self.results.gate_brakdowns.append(
+        #     {k.upper(): v for k, v in circuit.count_ops().items()}
+        # )
+        # self.results.density_matrices.append(
+        #     DensityMatrix.from_instruction(circuit)
+        # )
+
+        circuit = self.runner.last_transpiled_not_measured_circuit
+        if not self.runner.last_transpiled_not_measured_circuit:
+            circuit = self.runner.pm.run(self.builder.evolved_circuit)
+
+        circuit = circuit.decompose(reps=3)
+        self.results.depths.append(circuit.depth())
+        self.results.gate_counts.append(len(circuit))
+        self.results.nonlocal_gate_counts.append(circuit.num_nonlocal_gates())
         self.results.gate_brakdowns.append(
-            {
-                k.upper(): v
-                for k, v in self.builder.evolved_circuit.decompose(reps=3)
-                .count_ops()
-                .items()
-            }
+            {k.upper(): v for k, v in circuit.count_ops().items()}
+        )
+        circuit.save_density_matrix()
+        self.results.density_matrices.append(
+            self.backend.run(circuit).result().data(0)["density_matrix"]
         )

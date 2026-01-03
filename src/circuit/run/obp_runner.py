@@ -67,6 +67,7 @@ class OBPCircuitRunner(CircuitRunner):
 
             
         isa_circuit = self.pm.run(bp_circuit)
+        self.last_transpiled_not_measured_circuit = isa_circuit
         isa_observables = [
             observable.apply_layout(isa_circuit.layout) for observable in bp_obs
         ]

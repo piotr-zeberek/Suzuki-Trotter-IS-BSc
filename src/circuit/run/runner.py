@@ -11,7 +11,7 @@ import math
 
 
 class CircuitRunner(ABC):
-    def __init__(self, num_shots: int = 8192, optimization_level: int = 2):
+    def __init__(self, num_shots: int = 8192, optimization_level: int = 3):
         self.num_shots = num_shots
         self.optimization_level = optimization_level
 
@@ -21,6 +21,8 @@ class CircuitRunner(ABC):
         self.estimator = None
         self.sampler = None
         self.pm = None
+        
+        self.last_transpiled_not_measured_circuit = None
 
     def set_session(self, session: Session) -> None:
         self.session = session

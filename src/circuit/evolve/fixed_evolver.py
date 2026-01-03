@@ -36,7 +36,7 @@ class FixedCircuitEvolver(CircuitEvolver):
             self.times[i + 1] - self.times[i] for i in range(len(self.times) - 1)
         ]
 
-    def evolve(self):
+    def evolve(self) -> EvolutionResult:
         self.reset()
 
         with Session(backend=self.backend) as session:
