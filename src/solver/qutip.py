@@ -9,7 +9,8 @@ from qutip import (
     Qobj,
     QobjEvo,
     coefficient,
-    ket
+    ket,
+    Result
 )
 
 from ..definition import Term, Problem

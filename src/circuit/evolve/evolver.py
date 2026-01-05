@@ -85,5 +85,5 @@ class CircuitEvolver(ABC):
         )
         circuit.save_density_matrix()
         self.results.density_matrices.append(
-            self.backend.run(circuit).result().data(0)["density_matrix"]
+            self.backend.run(circuit, shots=8192).result().data(0)["density_matrix"]
         )

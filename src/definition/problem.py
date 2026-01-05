@@ -9,7 +9,7 @@ class Problem:
     def __init__(
         self,
         num_qubits: int,
-        init_state: Optional[str]|QuantumCircuit,
+        init_state: Optional[str] | QuantumCircuit,
         hamiltonian_terms: List[Term],
         observables_terms: List[List[Term]],
     ):
@@ -66,13 +66,15 @@ class Problem:
         )
 
     def observables_op(self, time: float = 0.0) -> List[SparsePauliOp]:
-        if not any(self.td_observables_terms):
-            return self.ti_observables_op
 
-        return self.ti_observables_op + [
-            SparsePauliOp.from_sparse_list(
-                [term(time) for term in td_observable_terms],
-                num_qubits=self.num_qubits,
+        ops = [
+            ti_op
+            + SparsePauliOp.from_sparse_list(
+                [td_term(time) for td_term in td_terms], num_qubits=self.num_qubits
             )
-            for td_observable_terms in self.td_observables_terms
+            for ti_op, td_terms in zip(
+                self.ti_observables_op, self.td_observables_terms
+            )
         ]
+
+        return ops
