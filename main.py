@@ -56,14 +56,14 @@ problem = Problem(
 )
 
 # simulation setup
-steps_lst = range(46, 102, 5)
+steps_lst = range(2, 32)
 synthesis_orders = [1, 2]
 fake_backends = [FakeJakartaV2(), FakeKolkataV2()]
 
 import datetime
 
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-base_directory = f"results/ising_3_qubits_{timestamp}/"
+base_directory = f"results/ising_3_qubits_test_{timestamp}/"
 
 for steps in steps_lst:
     times = np.linspace(0, time, steps)
@@ -103,7 +103,10 @@ for steps in steps_lst:
         # noisy simulation
         for fake_backend in fake_backends:
             noise_model = NoiseModel.from_backend(fake_backend)
-            simulator = AerSimulator(noise_model=noise_model)
+            simulator = AerSimulator(
+                noise_model=noise_model,
+                basis_gates=fake_backend.configuration().basis_gates,
+            )
 
             evolver = FixedCircuitEvolver(
                 problem=problem,
@@ -135,9 +138,8 @@ for steps in steps_lst:
 #     for time, expect_values in zip(exact_result.times, zip(*exact_result.expect)):
 #         expect_str = " ".join(f"{val}" for val in expect_values)
 #         f.write(f"{time} {expect_str}\n")
-        
-        
- 
+
+
 # testing
 ##############
 # from qiskit_ibm_runtime.fake_provider import FakeNairobiV2 as backend

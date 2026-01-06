@@ -58,20 +58,7 @@ class CircuitEvolver(ABC):
                 )
 
         self.results.times.append(time)
-
-        circuit = self.builder.evolved_circuit.decompose(reps=3)
-
-        # self.results.states.append(Statevector.from_instruction(circuit))
-        # self.results.depths.append(circuit.depth())
-        # self.results.gate_counts.append(len(circuit))
-        # self.results.nonlocal_gate_counts.append(circuit.num_nonlocal_gates())
-        # self.results.gate_brakdowns.append(
-        #     {k.upper(): v for k, v in circuit.count_ops().items()}
-        # )
-        # self.results.density_matrices.append(
-        #     DensityMatrix.from_instruction(circuit)
-        # )
-
+        
         circuit = self.runner.last_transpiled_not_measured_circuit
         if not self.runner.last_transpiled_not_measured_circuit:
             circuit = self.runner.pm.run(self.builder.evolved_circuit)
@@ -83,6 +70,9 @@ class CircuitEvolver(ABC):
         self.results.gate_brakdowns.append(
             {k.upper(): v for k, v in circuit.count_ops().items()}
         )
+        
+        circuit = self.builder.evolved_circuit
+        circuit = self.runner.pm.run(circuit)
         circuit.save_density_matrix()
         self.results.density_matrices.append(
             self.backend.run(circuit, shots=8192).result().data(0)["density_matrix"]

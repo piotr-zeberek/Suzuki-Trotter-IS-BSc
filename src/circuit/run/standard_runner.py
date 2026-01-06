@@ -12,6 +12,7 @@ class StandardCircuitRunner(CircuitRunner):
 
         isa_circuit = self.pm.run(circuit)
         isa_observables = [observable.apply_layout(isa_circuit.layout) for observable in observables]
+        self.last_transpiled_not_measured_circuit = isa_circuit
 
         job = self.estimator.run([(isa_circuit, isa_observables)], precision=self.precision)
         evs = job.result()[0].data.evs
